@@ -56,9 +56,6 @@ CREATE TABLE leaderboard (
 
 ## 📚 Dependencies  
 You’ll need the **MariaDB JDBC driver**:  
-- Download from: [https://mariadb.com/kb/en/mariadb-connector-j/](https://mariadb.com/kb/en/mariadb-connector-j/)  
-- Add the JAR to your Maven dependencies or build path  
-
 If you're using Maven, add this to your `pom.xml`:
 ```xml
 <dependency>
