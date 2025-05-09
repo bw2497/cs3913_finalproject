@@ -1,202 +1,217 @@
-    package com.mycompany.universityguessgame;
+package com.mycompany.universityguessgame;
 
-    import javax.swing.*;
-    import java.awt.*;
-    import java.awt.event.*;
-    import java.io.*;
-    import java.sql.*;
-    import java.util.*;
-    import java.util.List;
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.io.*;
+import java.sql.*;
+import java.util.*;
+import java.util.List;
 
-    public class UniversityGuessGame {
-        private JFrame frame;
-        private JTextField guessInput;
-        private JTextArea resultArea;
-        private JLabel timerLabel;
+public class UniversityGuessGame {
+    private JFrame frame;
+    private JTextField guessInput;
+    private JTextArea resultArea;
+    private JLabel timerLabel;
+    private GameGraphicsPanel graphicsPanel;
 
-        private List<University> universities;
-        private University mysteryUniversity;
+    private List<University> universities;
+    private University mysteryUniversity;
 
-        private int guessesLeft = 6;
-        private int timeLeft = 60;
-        private final Object lock = new Object();
+    private int guessesLeft = 6;
+    private int timeLeft = 60;
+    private final Object lock = new Object();
+    private TimerThread timerThread;
 
-        private TimerThread timerThread;
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(UniversityGuessGame::new);
+    }
 
-        public static void main(String[] args) {
-            SwingUtilities.invokeLater(UniversityGuessGame::new);
-        }
+    public UniversityGuessGame() {
+        universities = loadUniversities("top100_universities.csv");
+        Collections.shuffle(universities);
+        mysteryUniversity = universities.get(0);
+        buildUI();
+        startTimer();
+    }
 
-        public UniversityGuessGame() {
-            universities = loadUniversities("top100_universities.csv");
-            Collections.shuffle(universities);
-            mysteryUniversity = universities.get(0);
-            buildUI();
-            startTimer();
-        }
+    private void buildUI() {
+        frame = new JFrame("Guess the University");
+        frame.setSize(900, 600);
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setLayout(new BorderLayout());
 
-        private void buildUI() {
-            frame = new JFrame("Guess the University");
-            frame.setSize(700, 600);
-            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            frame.setLayout(new BorderLayout());
+        graphicsPanel = new GameGraphicsPanel();
+        graphicsPanel.setPreferredSize(new Dimension(200, 0));
+        frame.add(graphicsPanel, BorderLayout.WEST);
 
-            guessInput = new JTextField();
-            JButton submitButton = new JButton("Submit Guess");
-            submitButton.addActionListener(e -> checkGuess());
+        guessInput = new JTextField();
+        JButton submitButton = new JButton("Submit Guess");
+        submitButton.addActionListener(e -> checkGuess());
 
-            JButton leaderboardButton = new JButton("Leaderboard");
-            leaderboardButton.addActionListener(e -> {
-                List<String> top = DatabaseManager.getTopResults(10);
-                JOptionPane.showMessageDialog(frame, String.join("\n", top), "Top 10 Players", JOptionPane.INFORMATION_MESSAGE);
-            });
+        JButton leaderboardButton = new JButton("Leaderboard");
+        leaderboardButton.addActionListener(e -> {
+            List<String> top = DatabaseManager.getTopResults(10);
+            JOptionPane.showMessageDialog(frame,
+                String.join("\n", top),
+                "Top 10 Players",
+                JOptionPane.INFORMATION_MESSAGE);
+        });
 
-            JPanel topPanel = new JPanel(new BorderLayout());
-            topPanel.add(leaderboardButton, BorderLayout.WEST);
-            topPanel.add(guessInput, BorderLayout.CENTER);
-            topPanel.add(submitButton, BorderLayout.EAST);
+        JPanel topPanel = new JPanel(new BorderLayout(5,5));
+        topPanel.add(leaderboardButton, BorderLayout.WEST);
+        topPanel.add(guessInput, BorderLayout.CENTER);
+        topPanel.add(submitButton, BorderLayout.EAST);
+        frame.add(topPanel, BorderLayout.NORTH);
 
-            timerLabel = new JLabel("Time left: 60s");
-            JPanel statusPanel = new JPanel(new BorderLayout());
-            statusPanel.add(timerLabel, BorderLayout.WEST);
+        resultArea = new JTextArea();
+        resultArea.setEditable(false);
+        resultArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
+        frame.add(new JScrollPane(resultArea), BorderLayout.CENTER);
 
-            resultArea = new JTextArea();
-            resultArea.setEditable(false);
-            resultArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
-            JScrollPane scrollPane = new JScrollPane(resultArea);
+        timerLabel = new JLabel("Time left: 60s");
+        frame.add(timerLabel, BorderLayout.SOUTH);
 
-            frame.add(topPanel, BorderLayout.NORTH);
-            frame.add(statusPanel, BorderLayout.CENTER);
-            frame.add(scrollPane, BorderLayout.SOUTH);
-            frame.setVisible(true);
-        }
+        frame.setVisible(true);
+    }
 
-        private void startTimer() {
-            timerThread = new TimerThread();
-            timerThread.start();
-        }
+    private void startTimer() {
+        timerThread = new TimerThread();
+        timerThread.start();
+    }
 
-        private void checkGuess() {
-            String userGuess = guessInput.getText().trim().toLowerCase();
-            guessInput.setText("");
-            Optional<University> guessOpt = universities.stream()
-                    .filter(u -> u.getName().toLowerCase().contains(userGuess))
-                    .findFirst();
+    private void checkGuess() {
+        String userGuess = guessInput.getText().trim().toLowerCase();
+        guessInput.setText("");
+        Optional<University> guessOpt = universities.stream()
+                .filter(u -> u.getName().toLowerCase().contains(userGuess))
+                .findFirst();
 
-            if (guessOpt.isPresent()) {
-                University guessed = guessOpt.get();
-                guessesLeft--;
+        if (guessOpt.isPresent()) {
+            University guessed = guessOpt.get();
+            guessesLeft--;
 
-                StringBuilder sb = new StringBuilder();
-                sb.append("Guess ").append(6 - guessesLeft).append(": ").append(guessed.getName()).append("\n");
+            StringBuilder sb = new StringBuilder();
+            sb.append("Guess ").append(6 - guessesLeft)
+              .append(": ").append(guessed.getName()).append("\n");
 
-                int guessRank = guessed.getCurrentRank();
-                int targetRank = mysteryUniversity.getCurrentRank();
-                int guessHigh = guessed.getHighestRank();
-                int targetHigh = mysteryUniversity.getHighestRank();
+            int guessRank = guessed.getCurrentRank();
+            int targetRank = mysteryUniversity.getCurrentRank();
+            int guessHigh = guessed.getHighestRank();
+            int targetHigh = mysteryUniversity.getHighestRank();
 
-                String arrowRank = guessRank > targetRank ? " ↓" : guessRank < targetRank ? " ↑" : " ✅";
-                String arrowHigh = guessHigh > targetHigh ? " ↓" : guessHigh < targetHigh ? " ↑" : " ✅";
+            String arrowRank = guessRank > targetRank ? " ↓" : guessRank < targetRank ? " ↑" : " ✅";
+            String arrowHigh = guessHigh > targetHigh ? " ↓" : guessHigh < targetHigh ? " ↑" : " ✅";
 
-                sb.append("Rank: ").append(guessRank).append(arrowRank)
-                  .append(" (highest: ").append(guessHigh).append(arrowHigh).append(")\n");
+            sb.append("Rank: ").append(guessRank).append(arrowRank)
+              .append(" (highest: ").append(guessHigh).append(arrowHigh).append(")\n");
 
-                String stateMatch = guessed.getState().equalsIgnoreCase(mysteryUniversity.getState()) ? " (correct)" : "";
-                sb.append("State: ").append(guessed.getState()).append(stateMatch).append("\n");
+            String stateMatch = guessed.getState().equalsIgnoreCase(mysteryUniversity.getState()) ? " (correct)" : "";
+            sb.append("State: ").append(guessed.getState()).append(stateMatch).append("\n");
 
-                String[] guessedTags = guessed.getTags().split(";");
-                String[] targetTags = mysteryUniversity.getTags().split(";");
-                Set<String> targetTagSet = new HashSet<>();
-                for (String t : targetTags) targetTagSet.add(t.trim().toLowerCase());
+            String[] guessedTags = guessed.getTags().split(";");
+            String[] targetTags = mysteryUniversity.getTags().split(";");
+            Set<String> targetTagSet = new HashSet<>();
+            for (String t : targetTags) targetTagSet.add(t.trim().toLowerCase());
 
-                sb.append("Tags: ");
-                for (int i = 0; i < guessedTags.length; i++) {
-                    String tag = guessedTags[i].trim();
-                    if (targetTagSet.contains(tag.toLowerCase())) {
-                        sb.append(tag).append(" (correct)");
-                    } else {
-                        sb.append(tag);
-                    }
-                    if (i < guessedTags.length - 1) sb.append("; ");
+            sb.append("Tags: ");
+            for (int i = 0; i < guessedTags.length; i++) {
+                String tag = guessed.getTags().split(";")[i].trim();
+                if (targetTagSet.contains(tag.toLowerCase())) {
+                    sb.append(tag).append(" (correct)");
+                } else {
+                    sb.append(tag);
                 }
-                sb.append("\n\n");
+                if (i < guessedTags.length - 1) sb.append("; ");
+            }
+            sb.append("\n\n");
 
-                if (guessed.getName().equalsIgnoreCase(mysteryUniversity.getName())) {
-                    sb.append("✅ Congratulations! You guessed correctly!\n");
-                    sb.append("Official Website: ").append(mysteryUniversity.getWebsite()).append("\n");
-                    resultArea.append(sb.toString());
-                    promptAndSave(true);
-                    endGame();
-                    return;
-                }
-
+            if (guessed.getName().equalsIgnoreCase(mysteryUniversity.getName())) {
+                sb.append("✅ Congratulations! You guessed correctly!\n");
+                sb.append("Official Website: ").append(mysteryUniversity.getWebsite()).append("\n");
                 resultArea.append(sb.toString());
-
+                promptAndSave(true);
+                endGame();
+            } else {
+                resultArea.append(sb.toString());
                 if (guessesLeft == 0) {
-                    resultArea.append("❌ Game over. The university was: " + mysteryUniversity.getName() +
-                            "\nRank: " + mysteryUniversity.getCurrentRank() +
-                            " (highest: " + mysteryUniversity.getHighestRank() + ")\nState: " + mysteryUniversity.getState() +
-                            "\nTags: " + mysteryUniversity.getTags() +
-                            "\nOfficial Website: " + mysteryUniversity.getWebsite() + "\n");
+                    resultArea.append("❌ Game over. The university was: "
+                        + mysteryUniversity.getName() + "\nRank: "
+                        + mysteryUniversity.getCurrentRank() + "\n");
                     promptAndSave(false);
                     endGame();
                 } else {
                     resetTimer();
                 }
-            } else {
-                resultArea.append("❗ University not found. Try Enter FULL Name\n");
             }
+        } else {
+            resultArea.append("❗ University not found. Try FULL Name\n");
         }
+        graphicsPanel.repaint();
+    }
 
-        private void promptAndSave(boolean completed) {
-            String name = JOptionPane.showInputDialog(frame, "Enter your name for the leaderboard:");
-            if (name != null && !name.isBlank()) {
-                DatabaseManager.saveResult(name.trim(), 6 - guessesLeft, completed);
-            }
+    private void promptAndSave(boolean completed) {
+        String name = JOptionPane.showInputDialog(frame,
+            "Enter your name for the leaderboard:");
+        if (name != null && !name.isBlank()) {
+            DatabaseManager.saveResult(name.trim(), 6 - guessesLeft, completed);
         }
+    }
 
-        private void resetTimer() {
-            synchronized (lock) {
-                timeLeft = 60;
-            }
-        }
+    private void resetTimer() {
+        synchronized (lock) { timeLeft = 60; }
+        graphicsPanel.repaint();
+    }
 
-        private void endGame() {
-            guessInput.setEnabled(false);
-            timerThread.interrupt();
-        }
+    private void endGame() {
+        guessInput.setEnabled(false);
+        timerThread.interrupt();
+    }
 
-        private class TimerThread extends Thread {
-            @Override
-            public void run() {
-                while (timeLeft > 0 && guessesLeft > 0) {
-                    try {
-                        Thread.sleep(1000);
-                        synchronized (lock) {
-                            timeLeft--;
-                            SwingUtilities.invokeLater(() -> timerLabel.setText("Time left: " + timeLeft + "s"));
-
-                            if (timeLeft == 0) {
-                                guessesLeft--;
-                                resultArea.append("⏰ Time's up for this round! You lost 1 guess. Remaining: " + guessesLeft + "\n");
-                                resetTimer();
-                                if (guessesLeft == 0) {
-                                    resultArea.append("❌ Game over. The university was: " + mysteryUniversity.getName() +
-                                            "\nRank: " + mysteryUniversity.getCurrentRank() +
-                                            " (highest: " + mysteryUniversity.getHighestRank() + ")\nState: " + mysteryUniversity.getState() +
-                                            "\nTags: " + mysteryUniversity.getTags() +
-                                            "\nOfficial Website: " + mysteryUniversity.getWebsite() + "\n");
-                                    promptAndSave(false);
-                                    endGame();
-                                }
+    private class TimerThread extends Thread {
+        public void run() {
+            while (timeLeft > 0 && guessesLeft > 0) {
+                try {
+                    Thread.sleep(1000);
+                    synchronized (lock) {
+                        timeLeft--;
+                        SwingUtilities.invokeLater(() -> timerLabel.setText("Time left: " + timeLeft + "s"));
+                        graphicsPanel.repaint();
+                        if (timeLeft == 0) {
+                            guessesLeft--;
+                            resultArea.append("⏰ Time's up! Remaining: " + guessesLeft + "\n");
+                            resetTimer();
+                            if (guessesLeft == 0) {
+                                resultArea.append("❌ Game over. The university was: " + mysteryUniversity.getName() + "\n");
+                                promptAndSave(false);
+                                endGame();
                             }
                         }
-                    } catch (InterruptedException e) {
-                        break;
                     }
-                }
+                } catch (InterruptedException e) { break; }
             }
         }
+    }
+
+    private class GameGraphicsPanel extends JPanel {
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            int w = getWidth(), h = getHeight();
+            int barW = (int)((timeLeft/60.0)*w);
+            g.setColor(Color.GREEN);
+            g.fillRect(0,0,barW,20);
+            g.setColor(Color.BLACK);
+            g.drawRect(0,0,w-1,20);
+            int r=15, s=10, y=40;
+            for(int i=0;i<6;i++){
+                int x=s+i*(2*r+s);
+                g.setColor(i<guessesLeft?Color.BLUE:Color.RED);
+                g.fillOval(x,y,2*r,2*r);
+            }
+        }
+    }
+
 
         private static class University {
             private final String name;
@@ -282,4 +297,4 @@
             }
             return leaderboard;
         }
-    }
+}
