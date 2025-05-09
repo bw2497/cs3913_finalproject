@@ -7,7 +7,7 @@ A Java-based guessing game where players identify top U.S. universities based on
 
 ## 🛠️ Technologies Used  
 - Java  
-- Swing (GUI)  
+- Swing & AWT (custom `JPanel` painting) For Graphics
 - Thread Concurrency (with synchronization)  
 - File I/O (CSV parsing)  
 - JDBC (MySQL/MariaDB)  
@@ -15,11 +15,10 @@ A Java-based guessing game where players identify top U.S. universities based on
 ## ✨ Features  
 
 ### 🖥️ Interactive GUI  
-Built using Java Swing to provide a smooth gameplay experience:  
-- 🎯 Guess input field  
-- 🧠 Real-time feedback on rank, state, and tags  
-- ⏱️ Countdown timer per round  
-- 🏁 End-of-game result display  
+- Uses a **custom `JPanel`** (`GameGraphicsPanel`) that overrides `paintComponent(Graphics g)`.  
+- **Live Time Bar**: a green bar at the top shows the remaining seconds (updates every tick).  
+- **Guess Indicators**: a row of blue/red circles shows remaining vs. used guesses.  
+- Built on Swing’s event-dispatch thread for smooth rendering.
 
 ### 🧩 Game Mechanics  
 - 🎯 Player has 6 guesses to identify a randomly selected university  
